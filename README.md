@@ -1,5 +1,5 @@
 # retico-simplelogger
-A simple logger module for logging incremental units to JSON.
+A simple module for logging incremental units to a JSON file.
 
 ---
 
