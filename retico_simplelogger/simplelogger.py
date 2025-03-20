@@ -5,6 +5,12 @@ import orjson
 import retico_core
 
 def _default(obj):
+    """
+    Default function for orjson.dumps().
+
+    :param obj: The object to serialize.
+    :return: The name of the object being serialized.
+    """
     try:
         return type(obj).__name__
     except Exception:
@@ -12,13 +18,15 @@ def _default(obj):
 
 
 class SimpleLoggerModule(retico_core.AbstractConsumingModule):
+    """A simple module for logging incremental units."""
+
     @staticmethod
     def name():
         return "Simple Logger Module"
 
     @staticmethod
     def description():
-        return "Logs incoming payloads as JSON"
+        return "Logs incoming IUs as JSON"
 
     @staticmethod
     def input_ius():
@@ -29,6 +37,13 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
         return None
 
     def __init__(self, filename: str, update_types: list=None, unit_types: list=None, **kwargs):
+        """
+        Constructor for a SimpleLoggerModule.
+
+        :param filename: The name of the file to write to.
+        :param update_types: Optional filtering argument. A list that specifies what update types are required for a unit to be logged.
+        :param unit_types: Optional filtering argument. A list that specifies what unit types should be logged.
+        """
         super().__init__(**kwargs)
         self.queue = deque()
         self.iu_count = 0
@@ -67,6 +82,8 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
                 self.queue.append((iu, ut))
 
     def _loop(self):
+        """Threaded loop for dumping IUs to JSON file."""
+
         with open(self.filename, 'wb') as file:
             file.write("[".encode("utf-8"))
             while self._loop_active or len(self.queue) > 0:
@@ -79,7 +96,7 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
                     "timestamp": iu.created_at,
                     "payload": iu.payload,
                     "unit_type": iu,
-                    "update_type": str(ut),
+                    "update_type": ut,
                     "iuid": iu.iuid,
                     "creator": iu.creator,
                     "previous_iu": iu.previous_iu,
