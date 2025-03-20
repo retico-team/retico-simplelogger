@@ -25,10 +25,12 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
     def output_iu():
         return None
 
-    def __init__(self, filename, types=None, units=None, **kwargs):
+    def __init__(self, filename: str, types: list=None, units: list=None, **kwargs):
         super().__init__(**kwargs)
         self.queue = deque()
         self.iu_count = 0
+        self.types_filter_on = False
+        self.units_filter_on = False
 
         if filename.endswith(".json"):
             self.filename = filename
@@ -36,23 +38,29 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
             self.filename = filename + ".json"
 
         self.types = types
-        if self.types is None:
-            self.types = [
-                UpdateType.ADD,
-                UpdateType.REVOKE,
-                UpdateType.COMMIT
-            ]
-
         self.units = units
-        if self.units is None:
-            self.units = [IncrementalUnit, TextIU]
+
+        if types is not None:
+            self.types_filter_on = True
+
+        if units is not None:
+            self.units_filter_on = True
 
         self._loop_active = True
         threading.Thread(target=self._loop).start()
 
     def process_update(self, update_message):
         for iu, ut in update_message:
-            if type(iu) in self.units and ut in self.types:
+            if self.units_filter_on and self.types_filter_on:
+                if type(iu) in self.units and ut in self.types:
+                    self.queue.append((iu, ut))
+            elif self.units_filter_on:
+                if type(iu) in self.units:
+                    self.queue.append((iu, ut))
+            elif self.types_filter_on:
+                if ut in self.types:
+                    self.queue.append((iu, ut))
+            else:
                 self.queue.append((iu, ut))
 
     def _loop(self):
@@ -63,19 +71,19 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
                     time.sleep(0.01)
                     continue
 
-                input_iu, ut = self.queue.popleft()
+                iu, ut = self.queue.popleft()
                 entry = {
-                    "timestamp": input_iu.created_at,
-                    "payload": input_iu.payload,
-                    "unit_type": type(input_iu).__name__,
+                    "timestamp": iu.created_at,
+                    "payload": iu.payload,
+                    "unit_type": type(iu).__name__,
                     "update_type": str(ut),
-                    "creator": input_iu.creator,
-                    "iuid": input_iu.iuid,
-                    "grounded_in": input_iu.grounded_in,
+                    "creator": iu.creator,
+                    "iuid": iu.iuid,
+                    "grounded_in": iu.grounded_in,
                 }
 
-                if input_iu.previous_iu is not None:
-                    entry["previous_iu"] = type(input_iu.previous_iu).__name__
+                if iu.previous_iu is not None:
+                    entry["previous_iu"] = type(iu.previous_iu).__name__
                 else:
                     entry["previous_iu"] = None
 
