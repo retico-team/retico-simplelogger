@@ -1,12 +1,15 @@
 import time
 import threading
-import json
 from collections import deque
-
+import orjson
 import retico_core
-from retico_core import UpdateType
-from retico_core.abstract import IncrementalUnit
-from retico_core.text import TextIU
+
+def _default(obj):
+    try:
+        return type(obj).__name__
+    except Exception:
+        raise AttributeError(f"Can't call __name__ off of {type(obj)}. Failed to serialize {obj}.")
+
 
 class SimpleLoggerModule(retico_core.AbstractConsumingModule):
     @staticmethod
@@ -19,13 +22,13 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
 
     @staticmethod
     def input_ius():
-        return [IncrementalUnit]
+        return [retico_core.IncrementalUnit]
 
     @staticmethod
     def output_iu():
         return None
 
-    def __init__(self, filename: str, types: list=None, units: list=None, **kwargs):
+    def __init__(self, filename: str, update_types: list=None, unit_types: list=None, **kwargs):
         super().__init__(**kwargs)
         self.queue = deque()
         self.iu_count = 0
@@ -37,13 +40,13 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
         else:
             self.filename = filename + ".json"
 
-        self.types = types
-        self.units = units
+        self.types = update_types
+        self.units = unit_types
 
-        if types is not None:
+        if update_types is not None:
             self.types_filter_on = True
 
-        if units is not None:
+        if unit_types is not None:
             self.units_filter_on = True
 
         self._loop_active = True
@@ -64,9 +67,9 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
                 self.queue.append((iu, ut))
 
     def _loop(self):
-        with open(self.filename, 'w') as file:
-            file.write("[")
-            while self._loop_active:
+        with open(self.filename, 'wb') as file:
+            file.write("[".encode("utf-8"))
+            while self._loop_active or len(self.queue) > 0:
                 if len(self.queue) == 0:
                     time.sleep(0.01)
                     continue
@@ -75,25 +78,20 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
                 entry = {
                     "timestamp": iu.created_at,
                     "payload": iu.payload,
-                    "unit_type": type(iu).__name__,
+                    "unit_type": iu,
                     "update_type": str(ut),
-                    "creator": iu.creator,
                     "iuid": iu.iuid,
+                    "creator": iu.creator,
+                    "previous_iu": iu.previous_iu,
                     "grounded_in": iu.grounded_in,
                 }
 
-                if iu.previous_iu is not None:
-                    entry["previous_iu"] = type(iu.previous_iu).__name__
-                else:
-                    entry["previous_iu"] = None
-
-
                 if self.iu_count != 0:
-                    file.write(", ")
-                json.dump(entry, file, indent=4)
+                    file.write(", ".encode("utf-8"))
+                file.write(orjson.dumps(entry, option=orjson.OPT_INDENT_2, default=_default))
                 self.iu_count += 1
 
-            file.write("]")
+            file.write("]".encode("utf-8"))
 
     def shutdown(self):
         self._loop_active = False
