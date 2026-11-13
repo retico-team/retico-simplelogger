@@ -64,8 +64,7 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
         if unit_types is not None:
             self.units_filter_on = True
 
-        self._loop_active = True
-        threading.Thread(target=self._loop).start()
+        self._loop_active = False
 
     def process_update(self, update_message):
         for iu, ut in update_message:
@@ -109,6 +108,11 @@ class SimpleLoggerModule(retico_core.AbstractConsumingModule):
                 self.iu_count += 1
 
             file.write("]".encode("utf-8"))
+
+    def prepare_run(self):
+        self._loop_active = True
+        self.iu_count = 0
+        threading.Thread(target=self._loop).start()
 
     def shutdown(self):
         self._loop_active = False
